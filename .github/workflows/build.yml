@@ -15,10 +15,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 7.6.4
+      - run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" || true
       - run: npm install -g cordova@12
       - run: mkdir -p www && cp index.html www/index.html
       - run: cordova platform add android@12.0.1
