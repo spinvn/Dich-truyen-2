@@ -26,7 +26,7 @@ jobs:
           # Copy index.html vào thư mục assets của Android
           cp index.html app/src/main/assets/index.html
           
-          # Tạo AndroidManifest.xml (Cấp quyền Internet và WakeLock chạy ngầm)
+          # Tạo AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -51,7 +51,7 @@ jobs:
           </manifest>
           EOF
 
-          # Tạo mã nguồn MainActivity.java (Chống tắt CPU khi tắt màn hình)
+          # Tạo MainActivity.java
           cat << 'EOF' > app/src/main/java/com/example/truyentranslator/MainActivity.java
           package com.example.truyentranslator;
 
@@ -99,7 +99,7 @@ jobs:
           }
           EOF
 
-          # Tạo file cấu hình build.gradle (Cấp độ Project)
+          # Tạo build.gradle
           cat << 'EOF' > build.gradle
           buildscript {
               repositories {
@@ -121,7 +121,7 @@ jobs:
           }
           EOF
 
-          # Tạo file settings.gradle
+          # Tạo settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -141,7 +141,7 @@ jobs:
           include ':app'
           EOF
 
-          # Tạo file app/build.gradle
+          # Tạo app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -175,6 +175,11 @@ jobs:
               implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
+
+      - name: Install Gradle and Generate Wrapper
+        run: |
+          sudo apt-get update && sudo apt-get install -y gradle
+          gradle wrapper
 
       - name: Build APK with Gradle
         run: ./gradlew assembleDebug
