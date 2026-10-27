@@ -1,37 +1,186 @@
-name: Build APK
+name: Build Android APK
+
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ main, master ]
+  workflow_dispatch:
+
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          node-version: 20
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 7.6.4
-      - name: Cai Android build tools
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Create Android Project Structure
         run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "build-tools;33.0.2" "platforms;android-33"
-      - run: npm install -g cordova@12
-      - run: mkdir -p www && cp index.html www/index.html
-      - run: cordova platform add android@12.0.1
-      - run: |
-          cordova plugin add cordova-plugin-background-mode@0.7.3
-          cordova plugin add cordova-plugin-file@8.0.1
-          cordova plugin add cordova-plugin-x-socialsharing@6.0.4
-      - run: cordova build android --debug
-      - uses: actions/upload-artifact@v4
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/java/com/example/truyentranslator
+          
+          # Copy index.html vào thư mục assets của Android
+          cp index.html app/src/main/assets/index.html
+          
+          # Tạo AndroidManifest.xml (Cấp quyền Internet và WakeLock chạy ngầm)
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="Chuốt Truyện AI"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Tạo mã nguồn MainActivity.java (Chống tắt CPU khi tắt màn hình)
+          cat << 'EOF' > app/src/main/java/com/example/truyentranslator/MainActivity.java
+          package com.example.truyentranslator;
+
+          import android.os.Bundle;
+          import android.os.PowerManager;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+              private PowerManager.WakeLock wakeLock;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings webSettings = webView.getSettings();
+                  webSettings.setJavaScriptEnabled(true);
+                  webSettings.setDomStorageEnabled(true);
+                  webSettings.setDatabaseEnabled(true);
+                  webSettings.setAllowFileAccess(true);
+                  webSettings.setAllowContentAccess(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+
+                  PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                  if (powerManager != null) {
+                      wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TruyenApp::BackgroundExecutionLock");
+                      wakeLock.acquire();
+                  }
+              }
+
+              @Override
+              protected void onDestroy() {
+                  super.onDestroy();
+                  if (wakeLock != null && wakeLock.isHeld()) {
+                      wakeLock.release();
+                  }
+              }
+          }
+          EOF
+
+          # Tạo file cấu hình build.gradle (Cấp độ Project)
+          cat << 'EOF' > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # Tạo file settings.gradle
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "TruyenTranslator"
+          include ':app'
+          EOF
+
+          # Tạo file app/build.gradle
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.example.truyentranslator'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.example.truyentranslator"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
+      - name: Build APK with Gradle
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: chinh-van-apk
-          path: platforms/android/app/build/outputs/apk/debug/*.apk
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
