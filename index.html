@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chỉnh văn truyện convert</title>
+<style>
+:root{--bg:#faf8f4;--fg:#222;--mut:#6b6b6b;--card:#fff;--bd:#ddd6c8;--ac:#8a5a2b;--acfg:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17150f;--fg:#ece8df;--mut:#9d978a;--card:#211e16;--bd:#3a352a;--ac:#d9a066;--acfg:#1a1408}}
+:root{color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:1.35rem;margin:.2em 0 .1em}
+p.sub{color:var(--mut);margin:0 0 14px;font-size:.92rem}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-weight:600;font-size:.9rem;margin:10px 0 4px}
+label:first-child{margin-top:0}
+input,textarea,select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:150px;resize:vertical}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.inl{display:flex;gap:8px}.inl input{flex:1}
+button{padding:10px 16px;border:0;border-radius:8px;background:var(--ac);color:var(--acfg);font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.bar{height:8px;background:var(--bd);border-radius:6px;overflow:hidden;margin-top:12px}
+.bar>div{height:100%;width:0;background:var(--ac);transition:width .25s}
+.crow{display:grid;grid-template-columns:62px 1fr 42px;gap:8px;align-items:center;font-size:.85rem;margin-top:8px}
+.crow .bar{margin:0}.crow .st{grid-column:1/-1;color:var(--mut);font-size:.78rem;margin-top:-4px}
+#log{font-size:.85rem;color:var(--mut);margin-top:8px;white-space:pre-wrap;max-height:120px;overflow:auto}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>Chỉnh văn truyện convert</h1>
+<p class="sub">Gọi qua trạm trung chuyển (kiểu tương thích OpenAI). Chạy ngay trên trình duyệt.</p>
+
+<div class="card">
+  <label for="base">API endpoint</label>
+  <input id="base" value="https://catiecli.sukaka.top/v1" autocomplete="off">
+  <label for="key">Danh sách API key (mỗi dòng một key)</label>
+  <textarea id="key" style="min-height:100px" placeholder="cat-...&#10;cat-..." autocomplete="off" spellcheck="false"></textarea>
+  <small id="kc"></small>
+  <label for="model">Model</label>
+  <div class="inl"><input id="model" list="models" placeholder="tên model" autocomplete="off"><button id="lm" class="sec" type="button">Tải danh sách</button></div>
+  <datalist id="models"></datalist>
+  <div class="row" style="margin-top:6px">
+    <div><label for="chunk">Ký tự mỗi đoạn</label><input id="chunk" type="number" value="3000" min="500" max="12000" step="100"></div>
+    <div><label for="batch">Số đoạn làm cùng lúc</label><input id="batch" type="number" value="5" min="1" max="50"></div>
+    <div><label for="sleep">Nghỉ giữa các nhóm (giây)</label><input id="sleep" type="number" value="2" min="0" max="120"></div>
+  </div>
+  <small>Key chỉ lưu trong trình duyệt của bạn. Nhiều đoạn cùng lúc quá có thể bị trạm báo lỗi giới hạn tốc độ.</small>
+</div>
+
+<div class="card">
+  <label for="genre">Thể loại truyện</label>
+  <select id="genre"></select>
+  <label for="prompt">Prompt chỉnh văn của thể loại này (tự sửa được)</label>
+  <textarea id="prompt" style="min-height:200px"></textarea>
+  <div class="btns" style="margin-top:8px">
+    <button id="savep" type="button">Lưu prompt này</button>
+    <button id="resetp" class="sec" type="button">Khôi phục mặc định thể loại</button>
+  </div>
+  <small id="pst"></small>
+  <label for="gloss">Bảng thuật ngữ / xưng hô (tùy chọn, mỗi dòng một mục)</label>
+  <textarea id="gloss" style="min-height:90px" placeholder="Diệp Phàm = nhân vật chính, xưng &quot;ta&quot;&#10;Thanh Vân Kiếm Quyết = tên công pháp, giữ nguyên"></textarea>
+</div>
+
+<div class="card">
+  <label for="src">Truyện cần chỉnh</label>
+  <textarea id="src" placeholder="Dán nội dung vào đây, hoặc chọn file .txt bên dưới"></textarea>
+  <input id="file" type="file" accept=".txt,text/plain" style="margin-top:8px">
+  <div class="btns">
+    <button id="go">Bắt đầu</button>
+    <button id="pause" class="sec" disabled>Tạm dừng</button>
+    <button id="stop" class="sec" disabled>Dừng</button>
+    <button id="batt" class="sec" type="button" style="display:none">Tắt tối ưu pin</button>
+  </div>
+  <div class="bar"><div id="prog"></div></div>
+  <div id="chunks"></div>
+  <div id="log"></div>
+</div>
+
+<div class="card">
+  <label for="out">Kết quả (đọc trực tiếp)</label>
+  <textarea id="out" readonly style="min-height:260px"></textarea>
+  <div class="btns">
+    <button id="copy" class="sec">Sao chép</button>
+    <button id="dl" class="sec">Tải về .txt</button>
+  </div>
+</div>
+</main>
+
+<script src="cordova.js"></script>
+<script>
+const DEFAULT_PROMPT = `Bạn là biên tập viên truyện tiếng Việt chuyên chỉnh sửa truyện Trung Quốc dịch/convert thô.
+
+Nhiệm vụ: viết lại đoạn văn được đưa, giữ nguyên nội dung, sự kiện, hội thoại và thứ tự câu chuyện, nhưng làm cho câu chữ tự nhiên, mượt mà như văn tiếng Việt.
+
+Quy tắc:
+1. Không thêm, bớt hay đổi tình tiết. Không tóm tắt. Không chú thích, không bình luận.
+2. Sửa trật tự từ kiểu Hán-Việt, câu cụt, lặp từ, từ dịch máy cứng nhắc thành cách nói tiếng Việt tự nhiên.
+3. Giữ nhất quán tên nhân vật, địa danh, tên công pháp/chiêu thức, cách xưng hô (ta, ngươi, huynh, muội, tại hạ...) theo bảng thuật ngữ nếu có. Nếu không có bảng, giữ nguyên các tên riêng như bản gốc.
+4. Giữ văn phong phù hợp thể loại (cổ trang, tiên hiệp, ngôn tình...). Không hiện đại hóa quá mức lời thoại cổ trang.
+5. Giữ cấu trúc đoạn văn và dấu ngoặc thoại như bản gốc.
+6. Chỉ trả về đoạn văn đã chỉnh sửa, không có lời dẫn hay giải thích.`;
+
+const MAX_TRIES = 4;
+const $ = id => document.getElementById(id);
+const SAVED = ['base', 'key', 'model', 'chunk', 'batch', 'sleep'];
+let stopFlag = false, pauseFlag = false, running = false;
+const ctrls = new Set();
+
+try { SAVED.forEach(id => { const v = localStorage.getItem('ct_' + id); if (v) $(id).value = v; }); } catch (e) {}
+const saveAll = () => { try { SAVED.forEach(id => localStorage.setItem('ct_' + id, $(id).value)); localStorage.setItem('ct_genre', curGenre); } catch (e) {} };
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const log = m => { const l = $('log'); l.textContent += m + '\n'; l.scrollTop = l.scrollHeight; };
+const baseUrl = () => $('base').value.trim().replace(/\/+$/, '');
+const netHint = e => (e instanceof TypeError ? 'Không kết nối được (sai địa chỉ, mất mạng, hoặc trạm chặn gọi từ trình duyệt)' : e.message);
+
+const countKeys = () => { const c = $('key').value.split(/\s+/).filter(Boolean).length; $('kc').textContent = c ? 'Đang có ' + c + ' key. Nhóm đầu dùng key 1 đến ' + Math.min(c, +$('batch').value || 5) + ', nhóm sau dùng các key kế tiếp rồi quay vòng.' : ''; };
+$('key').addEventListener('input', countKeys); $('batch').addEventListener('input', countKeys); countKeys();
+const COMMON = `Nhiệm vụ: viết lại đoạn văn được đưa, giữ nguyên nội dung, sự kiện, hội thoại và thứ tự câu chuyện, nhưng làm cho câu chữ tự nhiên, mượt mà như văn tiếng Việt.
+
+Quy tắc chung:
+1. Không thêm, bớt hay đổi tình tiết. Không tóm tắt. Không chú thích, không bình luận.
+2. Sửa trật tự từ kiểu Hán-Việt, câu cụt, lặp từ, từ dịch máy cứng nhắc thành cách nói tiếng Việt tự nhiên.
+3. Giữ nhất quán tên nhân vật, địa danh, tên công pháp/chiêu thức, cách xưng hô theo bảng thuật ngữ nếu có. Nếu không có bảng, giữ nguyên các tên riêng như bản gốc.
+4. Giữ cấu trúc đoạn văn và dấu ngoặc thoại như bản gốc.
+5. Chỉ trả về đoạn văn đã chỉnh sửa, không có lời dẫn hay giải thích.`;
+const mk = (genre, extra) => 'Bạn là biên tập viên truyện tiếng Việt chuyên chỉnh sửa truyện Trung Quốc dịch/convert thô, thể loại ' + genre + '.\n\n' + COMMON + '\n\nQuy tắc riêng cho thể loại ' + genre + ':\n' + extra;
+
+const GENRES = [
+  { id: 'chung', name: 'Chung (mặc định)', prompt: DEFAULT_PROMPT },
+  { id: 'tutien', name: 'Tu tiên', prompt: mk('tu tiên', `- Giữ không khí huyền huyễn, cổ phong; dùng từ Hán Việt vừa phải ở các thuật ngữ tu luyện (cảnh giới, công pháp, pháp bảo, linh thạch, tông môn, sư tôn, sư huynh, sư muội...), không dịch thuần Việt làm mất chất tu tiên.
+- Xưng hô theo vai vế và tu vi: ta/ngươi, bản tọa, lão phu, tiểu bối, đạo hữu, tiền bối... Mỗi cặp nhân vật giữ một cách xưng hô nhất quán.
+- Giữ nhất quán tên cảnh giới và đơn vị (ví dụ luyện khí, trúc cơ, kim đan, nguyên anh).
+- Các cảnh giao chiến, đột phá, luyện đan cần mạch lạc, rõ động tác; không hiện đại hóa lời thoại.`) },
+  { id: 'hiendai', name: 'Hiện đại', prompt: mk('hiện đại', `- Dùng văn phong đời thường, câu gọn, hội thoại như người Việt nói chuyện thật; bỏ giọng Hán Việt cứng và từ cổ.
+- Xưng hô theo quan hệ hiện đại: tôi/anh/em/cậu/tớ/mình/bạn/sếp... chọn cho đúng tuổi tác, quan hệ, hoàn cảnh và giữ nhất quán.
+- Chức danh, địa điểm, đồ vật, mạng xã hội, tiền tệ... dùng cách gọi quen thuộc với người Việt, nhưng giữ nguyên tên riêng nhân vật và địa danh.
+- Giữ nhịp truyện nhanh, thoại sinh động; không dùng lối văn cổ trang.`) },
+  { id: 'sachiep', name: 'Sắc hiệp', prompt: mk('sắc hiệp (võ hiệp cổ trang)', `- Bối cảnh giang hồ cổ trang: giữ giọng văn cổ phong, từ ngữ võ hiệp (môn phái, nội công, chiêu thức, giang hồ...), không hiện đại hóa.
+- Xưng hô theo bối cảnh cổ: huynh/muội, tại hạ, cô nương, công tử, tiền bối... và giữ nhất quán.
+- Với các đoạn nhạy cảm, giữ đúng mức độ miêu tả và giọng điệu của bản gốc: không tự thêm chi tiết mới, không lược bỏ hay làm nhẹ đi, chỉ làm cho câu chữ mượt và tự nhiên; tránh từ ngữ thô tục nếu bản gốc không dùng.
+- Các cảnh võ công, đấu kiếm, nội lực cần rõ ràng, mạch lạc.`) }
+];
+let curGenre = 'chung', baseline = '';
+const gById = id => GENRES.find(g => g.id === id) || GENRES[0];
+const storedPrompt = id => { try { return localStorage.getItem('ct_prompt_' + id) || (id === 'chung' ? localStorage.getItem('ct_prompt') : null); } catch (e) { return null; } };
+function loadGenre(id) {
+  curGenre = id; $('genre').value = id;
+  const sv = storedPrompt(id);
+  $('prompt').value = sv || gById(id).prompt;
+  baseline = $('prompt').value;
+  $('pst').textContent = sv ? 'Đang dùng prompt bạn đã lưu cho thể loại này.' : 'Đang dùng prompt mặc định của thể loại này.';
+}
+GENRES.forEach(g => { const o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('genre').appendChild(o); });
+let lastGenre = 'chung'; try { lastGenre = localStorage.getItem('ct_genre') || 'chung'; } catch (e) {}
+loadGenre(gById(lastGenre).id);
+$('genre').onchange = () => {
+  if ($('prompt').value !== baseline && !confirm('Prompt hiện tại có chỗ sửa chưa lưu. Chuyển thể loại sẽ mất phần sửa đó. Tiếp tục?')) { $('genre').value = curGenre; return; }
+  loadGenre($('genre').value);
+  try { localStorage.setItem('ct_genre', curGenre); } catch (e) {}
+};
+$('savep').onclick = () => {
+  try {
+    localStorage.setItem('ct_prompt_' + curGenre, $('prompt').value);
+    localStorage.setItem('ct_genre', curGenre);
+    baseline = $('prompt').value;
+    $('pst').textContent = 'Đã lưu prompt cho thể loại ' + gById(curGenre).name + '. Lần sau mở lại sẽ tự dùng.';
+  } catch (e) { $('pst').textContent = 'Không lưu được trong trình duyệt này.'; }
+};
+$('resetp').onclick = () => {
+  try { localStorage.removeItem('ct_prompt_' + curGenre); if (curGenre === 'chung') localStorage.removeItem('ct_prompt'); } catch (e) {}
+  $('prompt').value = gById(curGenre).prompt; baseline = $('prompt').value;
+  $('pst').textContent = 'Đã khôi phục prompt mặc định của thể loại này.';
+};
+$('file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) $('src').value = await f.text(); });
+
+$('lm').onclick = async () => {
+  try {
+    const r = await fetch(baseUrl() + '/models', { headers: { Authorization: 'Bearer ' + ($('key').value.trim().split(/\s+/)[0] || '') } });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
+    const raw = await r.text();
+    let j = null; try { j = JSON.parse(raw); } catch (e) {}
+    const list = Array.isArray(j) ? j : (j && (j.data || j.models || j.result)) || [];
+    const ids = list.map(m => typeof m === 'string' ? m : (m.id || m.name || m.model)).filter(Boolean);
+    if (!ids.length) log('Phản hồi của trạm: ' + raw.slice(0, 300));
+    $('models').innerHTML = '';
+    ids.forEach(id => { const o = document.createElement('option'); o.value = id; $('models').appendChild(o); });
+    log('Đã tải ' + ids.length + ' model. Bấm vào ô Model để chọn.');
+  } catch (e) { log('Không tải được danh sách model: ' + netHint(e)); }
+};
+
+function split(text, limit) {
+  const chunks = []; let cur = [], size = 0;
+  for (const p of text.split('\n')) {
+    if (size + p.length + 1 > limit && cur.length) { chunks.push(cur.join('\n')); cur = []; size = 0; }
+    cur.push(p); size += p.length + 1;
+  }
+  if (cur.length) chunks.push(cur.join('\n'));
+  return chunks;
+}
+
+async function callAPI(cfg, userPrompt, onChars, signal) {
+  const r = await fetch(cfg.base + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key },
+    body: JSON.stringify({
+      model: cfg.model, temperature: 0.7, stream: true,
+      messages: [{ role: 'system', content: cfg.system }, { role: 'user', content: userPrompt }]
+    }),
+    signal
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    const err = new Error('HTTP ' + r.status + (r.status < 500 && r.status !== 429 ? ': ' + t.slice(0, 160) : ''));
+    err.fatal = r.status === 404;
+    throw err;
+  }
+  if (!(r.headers.get('content-type') || '').includes('event-stream')) {
+    const j = await r.json();
+    const t = (j.choices?.[0]?.message?.content || '').trim();
+    onChars(t.length);
+    return t;
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '', text = '';
+  const feed = lines => {
+    for (const ln of lines) {
+      if (!ln.startsWith('data:')) continue;
+      const d = ln.slice(5).trim();
+      if (!d || d === '[DONE]') continue;
+      try { const c = JSON.parse(d).choices?.[0]?.delta?.content; if (c) { text += c; onChars(text.length); } } catch (e) {}
+    }
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    feed(lines);
+  }
+  feed((buf + '\n').split('\n'));
+  return text.trim();
+}
+
+function makeRow(i) {
+  const d = document.createElement('div');
+  d.className = 'crow';
+  d.innerHTML = '<span></span><div class="bar"><div></div></div><span style="text-align:right">0%</span><span class="st">đang chờ</span>';
+  d.children[0].textContent = 'Đoạn ' + (i + 1);
+  $('chunks').appendChild(d);
+  return { set(pct, st) {
+    d.children[1].firstChild.style.width = pct + '%';
+    d.children[2].textContent = pct + '%';
+    if (st) d.children[3].textContent = st;
+  } };
+}
+
+async function runChunk(i, chunks, cfg, prompts) {
+  const row = makeRow(i);
+  for (let a = 1; a <= MAX_TRIES; a++) {
+    if (stopFlag) return undefined;
+    const k = (i + (a - 1) * cfg.n) % cfg.keys.length;
+    const tag = (a > 1 ? 'thử lại ' + a + '/' + MAX_TRIES : 'đang chỉnh') + ' · key ' + (k + 1);
+    row.set(0, tag);
+    const c = new AbortController(); ctrls.add(c);
+    try {
+      const res = await callAPI({ ...cfg, key: cfg.keys[k] }, prompts[i],
+        n => row.set(Math.min(99, Math.round(n / Math.max(chunks[i].length, 1) * 100)), tag), c.signal);
+      if (res) { row.set(100, 'xong'); return res; }
+      log('Đoạn ' + (i + 1) + ' (key ' + (k + 1) + '): kết quả rỗng, lần ' + a + '/' + MAX_TRIES);
+    } catch (e) {
+      if (stopFlag) return undefined;
+      if (e.fatal) throw e;
+      log('Đoạn ' + (i + 1) + ' (key ' + (k + 1) + '): ' + netHint(e) + ', lần ' + a + '/' + MAX_TRIES);
+    } finally { ctrls.delete(c); }
+    if (a < MAX_TRIES) {
+      const wait = Math.min(30, 3 * a * a);
+      row.set(0, 'lỗi, chờ ' + wait + 's rồi thử lại');
+      await sleep(wait * 1000);
+    }
+  }
+  row.set(100, 'lỗi nhiều lần: giữ bản gốc');
+  return null;
+}
+
+function setButtons(on) {
+  $('go').disabled = on; $('pause').disabled = !on; $('stop').disabled = !on;
+  $('pause').textContent = 'Tạm dừng';
+}
+
+$('go').onclick = async () => {
+  if (running) return;
+  const cfg = { base: baseUrl(), keys: $('key').value.split(/\s+/).map(x => x.trim()).filter(Boolean), model: $('model').value.trim(), system: $('prompt').value.trim() || DEFAULT_PROMPT };
+  const text = $('src').value.trim();
+  if (!cfg.base || !cfg.keys.length || !cfg.model) return alert('Hãy nhập đủ endpoint, ít nhất một API key và model.');
+  if (!text) return alert('Hãy dán truyện hoặc chọn file.');
+  saveAll();
+  const gloss = $('gloss').value.trim();
+  const chunks = split(text, +$('chunk').value || 3000);
+  const n = Math.max(1, Math.min(50, +$('batch').value || 5));
+  cfg.n = n;
+  const gap = (+$('sleep').value || 0) * 1000;
+  const prompts = chunks.map((c, i) => {
+    const p = [];
+    if (gloss) p.push('BẢNG THUẬT NGỮ / XƯNG HÔ:\n' + gloss);
+    if (i > 0) p.push('NGỮ CẢNH (cuối đoạn trước, bản gốc, chỉ để tham khảo, KHÔNG viết lại):\n' + chunks[i - 1].slice(-400));
+    p.push('ĐOẠN CẦN CHỈNH VĂN:\n' + c);
+    return p.join('\n\n');
+  });
+  running = true; stopFlag = false; pauseFlag = false; setButtons(true);
+  $('out').value = ''; $('log').textContent = ''; $('prog').style.width = '0'; $('chunks').innerHTML = '';
+  const failed = [];
+  log('Tổng ' + chunks.length + ' đoạn, làm ' + n + ' đoạn cùng lúc, xoay vòng ' + cfg.keys.length + ' key.');
+  try {
+    for (let s = 0; s < chunks.length; s += n) {
+      if (pauseFlag) log('Đang tạm dừng. Bấm Tiếp tục để chạy nhóm kế tiếp.');
+      while (pauseFlag && !stopFlag) await sleep(300);
+      if (stopFlag) break;
+      $('chunks').innerHTML = '';
+      const idx = [];
+      for (let i = s; i < Math.min(s + n, chunks.length); i++) idx.push(i);
+      log('Nhóm đoạn ' + (idx[0] + 1) + ' đến ' + (idx[idx.length - 1] + 1));
+      const results = await Promise.all(idx.map(i => runChunk(i, chunks, cfg, prompts)));
+      let done = 0;
+      for (let k = 0; k < idx.length; k++) {
+        if (results[k] === undefined) break;
+        if (results[k] === null) failed.push(idx[k] + 1);
+        $('out').value += (results[k] === null ? chunks[idx[k]] : results[k]) + '\n';
+        done++;
+      }
+      $('out').scrollTop = $('out').scrollHeight;
+      $('prog').style.width = Math.round((s + done) / chunks.length * 100) + '%';
+      if (stopFlag) break;
+      if (s + n < chunks.length && gap) await sleep(gap);
+    }
+    log(stopFlag ? 'Đã dừng. Phần đã chỉnh xong vẫn còn trong khung kết quả.' : 'Xong.');
+    if (failed.length) log('Các đoạn giữ nguyên bản gốc do lỗi: ' + failed.join(', ') + '.');
+  } catch (e) {
+    stopFlag = true; ctrls.forEach(c => c.abort());
+    log('Lỗi: ' + netHint(e) + '\nKiểm tra lại endpoint, API key và tên model.');
+  }
+  running = false; setButtons(false);
+};
+
+$('pause').onclick = () => {
+  pauseFlag = !pauseFlag;
+  $('pause').textContent = pauseFlag ? 'Tiếp tục' : 'Tạm dừng';
+  if (pauseFlag) log('Sẽ tạm dừng sau khi nhóm đoạn hiện tại chạy xong.');
+};
+
+$('stop').onclick = () => { stopFlag = true; pauseFlag = false; ctrls.forEach(c => c.abort()); };
+
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('out').value); log('Đã sao chép.'); }
+  catch (e) { $('out').select(); document.execCommand('copy'); log('Đã sao chép.'); }
+};
+
+$('dl').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$('out').value], { type: 'text/plain;charset=utf-8' }));
+  a.download = 'truyen_da_chinh.txt';
+  a.click();
+};
+
+// ===== Phần dành cho ứng dụng Android (Cordova) =====
+document.addEventListener('deviceready', () => {
+  const bm = window.cordova && cordova.plugins && cordova.plugins.backgroundMode;
+  if (bm) {
+    bm.setDefaults({ title: 'Chỉnh văn truyện', text: 'Đang chạy ngầm', hidden: false });
+    bm.enable();
+    bm.on('activate', () => bm.disableWebViewOptimizations());
+    $('batt').style.display = '';
+    $('batt').onclick = () => bm.disableBatteryOptimizations();
+  }
+  // WebView không tải được file kiểu blob, nên ghi file rồi mở bảng chia sẻ để lưu.
+  $('dl').onclick = () => {
+    const text = $('out').value;
+    if (!text) return;
+    window.resolveLocalFileSystemURL(cordova.file.cacheDirectory, dir => {
+      dir.getFile('truyen_da_chinh.txt', { create: true }, fe => {
+        fe.createWriter(w => {
+          let step = 0;
+          w.onwriteend = () => {
+            if (step === 0) { step = 1; w.write(new Blob([text], { type: 'text/plain' })); }
+            else window.plugins.socialsharing.shareWithOptions({ files: [fe.nativeURL], chooserTitle: 'Lưu hoặc gửi file' }, () => {}, () => log('Không mở được bảng chia sẻ. Hãy dùng nút Sao chép.'));
+          };
+          w.onerror = () => log('Không ghi được file. Hãy dùng nút Sao chép.');
+          w.truncate(0);
+        });
+      });
+    }, () => log('Không truy cập được bộ nhớ. Hãy dùng nút Sao chép.'));
+  };
+}, false);
+</script>
+</body>
+</html>
